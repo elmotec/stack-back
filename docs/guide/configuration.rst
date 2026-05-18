@@ -420,7 +420,7 @@ when using the official mariadb_ image.
 Backups are done by dumping all databases directly into
 restic through stdin using ``mysqldump``. It will appear
 in restic as a separate snapshot with path
-``/databases/<service_name>/all_databases.sql``.
+``/databases/<service_name>/all_databases.sql`` tagged with ``mariadb``.
 
 .. warning: This will only back up the databases the
             ``MARIADB_USER` has access to. If you have multiple
@@ -460,7 +460,7 @@ when using the official mysql_ image.
 Backups are done by dumping all databases directly into
 restic through stdin using ``mysqldump``. It will appear
 in restic as a separate snapshot with path
-``/databases/<service_name>/all_databases.sql``.
+``/databases/<service_name>/all_databases.sql`` tagged with ``mysql``.
 
 .. warning: This will only back up the databases the
             ``MYSQL_USER` has access to. If you have multiple
@@ -501,7 +501,7 @@ when using the official postgres_ image.
 Backups are done by dumping the ``POSTGRES_DB`` directly into
 restic through stdin using ``pg_dump``. It will appear
 in restic as a separate snapshot with path
-``/databases/<service_name>/<POSTGRES_DB>.sql``.
+``/databases/<service_name>/<POSTGRES_DB>.sql`` tagged with ``postgres``.
 
 .. warning:: Currently only the ``POSTGRES_DB`` database
              is dumped.

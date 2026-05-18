@@ -44,10 +44,12 @@ def backup_from_stdin(
     container_id: str,
     source_command: List[str],
     environment: Union[dict, list] = None,
+    extra_args: List[str] = None,
 ):
     """
     Backs up from stdin running the source_command passed in within the given container.
     It will appear in restic with the filename (including path) passed in.
+    extra_args are appended to the restic backup command (e.g. ["--tag", "mysql"]).
     """
     dest_command = restic(
         repository,
@@ -56,7 +58,7 @@ def backup_from_stdin(
             "--stdin",
             "--stdin-filename",
             filename,
-        ],
+        ] + (extra_args or []),
     )
 
     client = utils.docker_client()

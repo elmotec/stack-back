@@ -66,6 +66,7 @@ class MariadbContainer(Container):
             self.id,
             self.dump_command(),
             environment={"MYSQL_PWD": creds["password"]},
+            extra_args=["--tag", self.container_type],
         )
 
     def backup_destination_path(self) -> str:
@@ -139,6 +140,7 @@ class MysqlContainer(Container):
             self.id,
             self.dump_command(),
             environment={"MYSQL_PWD": creds["password"]},
+            extra_args=["--tag", self.container_type],
         )
 
     def backup_destination_path(self) -> str:
@@ -201,6 +203,7 @@ class PostgresContainer(Container):
             self.backup_destination_path(),
             self.id,
             self.dump_command(),
+            extra_args=["--tag", self.container_type],
         )
 
     def backup_destination_path(self) -> str:
