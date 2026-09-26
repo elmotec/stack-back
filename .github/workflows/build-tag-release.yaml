@@ -3,25 +3,29 @@ name: "Build, Tag, and Release"
 on:
   push:
     branches:
-      - main
+      - dev
     paths-ignore:
       - .gitignore
       - .github/renovate.json
-      - .github/workflows/
+      - .github/workflows/**
       - .pre-commit-config.yaml
       - LICENSE
-      - README.MD
-      - docs/
-  workflow_dispatch:
+      - README.md
+      - docs/**
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  BASE_VERSION: 1.5.4
+  FORK_SUFFIX: elmotec
+
+concurrency:
+  group: dev-release
+  cancel-in-progress: false
 
 jobs:
   build-tag-release:
     runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
     permissions:
       contents: write
       packages: write
@@ -34,43 +38,44 @@ jobs:
 
       - name: Get next version
         id: version
-        uses: anothrNick/github-tag-action@4ed44965e0db8dab2b466a16da04aec3cc312fd8 # 1.75.0
-        env:
-          WITH_V: true
-          DEFAULT_BUMP: patch
-          DRY_RUN: true
-
-      - name: Check if version changed
-        id: changed
-        continue-on-error: true
         run: |
-          if [[ "${{ steps.version.outputs.new_tag }}" == "${{ steps.version.outputs.old_tag }}" ]]; then
-            echo "Version not changed"
-            exit 1
-          else
-            echo "Version changed"
-          fi
-          
+          git fetch --tags origin
+          prefix="v${BASE_VERSION}-${FORK_SUFFIX}."
+          highest=-1
+          while IFS= read -r tag; do
+            number=${tag#"$prefix"}
+            if [[ "$number" =~ ^[0-9]+$ ]] && (( 10#$number > highest )); then
+              highest=$((10#$number))
+            fi
+          done < <(git tag --list "${prefix}*")
+          echo "new_tag=${prefix}$((highest + 1))" >> "$GITHUB_OUTPUT"
+
       - name: Install uv
-        if: ${{ steps.changed.outcome == 'success' }}
         uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
 
       - name: Bump version in files
-        if: ${{ steps.changed.outcome == 'success' }}
+        env:
+          VERSION_TAG: ${{ steps.version.outputs.new_tag }}
         run: |
-          version="${{ steps.version.outputs.new_tag }}"
-          clean_version="${version#v}"
-          sed -i "s/__version__ = .*/__version__ = \"${clean_version}\"/" src/restic_compose_backup/__init__.py
-          sed -i "s/version = .*/version = \"${clean_version}\"/" src/pyproject.toml
-          sed -i "s/release = .*/release = \"${clean_version}\"/" docs/conf.py
-          uv lock --directory src --upgrade-package restic-compose-backup
+          [[ "$VERSION_TAG" == "v${BASE_VERSION}-${FORK_SUFFIX}."* ]]
+          package_version="${VERSION_TAG#v}"
+          package_version="${package_version/-${FORK_SUFFIX}./+${FORK_SUFFIX}.}"
+          sed -i "s/__version__ = .*/__version__ = \"${package_version}\"/" src/restic_compose_backup/__init__.py
+          sed -i "s/version = .*/version = \"${package_version}\"/" src/pyproject.toml
+          sed -i "s/release = .*/release = \"${package_version}\"/" docs/conf.py
+          uv lock --directory src
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/restic_compose_backup/__init__.py src/pyproject.toml src/uv.lock docs/conf.py
+          git commit -m "chore: set version ${package_version}"
+          git push origin HEAD:dev
 
       - name: Push version tag
-        if: ${{ steps.changed.outcome == 'success' }}
-        uses: anothrNick/github-tag-action@4ed44965e0db8dab2b466a16da04aec3cc312fd8 # 1.75.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CUSTOM_TAG: ${{ steps.version.outputs.new_tag }}
+          VERSION_TAG: ${{ steps.version.outputs.new_tag }}
+        run: |
+          git tag "$VERSION_TAG"
+          git push origin "refs/tags/$VERSION_TAG"
 
       - name: Log in to the Container registry
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
@@ -90,6 +95,7 @@ jobs:
         run: |
           TAG=${{ steps.version.outputs.new_tag }}
           echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "revision=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           echo "timestamp=$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
@@ -101,14 +107,13 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-            ${{ steps.changed.outcome == 'success' && format('{0}/{1}:latest', env.REGISTRY, env.IMAGE_NAME) || null }}
-            ${{ steps.changed.outcome == 'success' && format('{0}/{1}:{2}', env.REGISTRY, env.IMAGE_NAME, steps.version.outputs.new_tag) || null }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.new_tag }}
           labels: |
             org.opencontainers.image.title=${{ github.event.repository.name }}
             org.opencontainers.image.url=${{ github.repositoryUrl }}
             org.opencontainers.image.source=${{ github.repositoryUrl }}
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
             org.opencontainers.image.created=${{ steps.meta.outputs.timestamp }}
 
       - name: Attest container image build provenance
@@ -121,14 +126,14 @@ jobs:
       - name: Generate SPDX SBOM
         uses: anchore/sbom-action@fbfd9c6c189226748411491745178e0c2017392d # v0.20.10
         with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.changed.outcome == 'success' && steps.version.outputs.new_tag || github.ref_name }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.new_tag }}
           format: spdx-json
           output-file: ./sbom.spdx.json
 
       - name: Generate CycloneDX SBOM
         uses: anchore/sbom-action@fbfd9c6c189226748411491745178e0c2017392d # v0.20.10
         with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.changed.outcome == 'success' && steps.version.outputs.new_tag || github.ref_name }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.new_tag }}
           format: cyclonedx-json
           output-file: ./sbom.cyclonedx.json
 
@@ -141,11 +146,11 @@ jobs:
           push-to-registry: true
 
       - name: Update release
-        if: ${{ steps.changed.outcome == 'success' }}
         uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
         with:
           allowUpdates: true
           artifacts: "sbom.spdx.json,sbom.cyclonedx.json"
           updateOnlyUnreleased: true
+          prerelease: true
           generateReleaseNotes: true
           tag: ${{ steps.version.outputs.new_tag }}
