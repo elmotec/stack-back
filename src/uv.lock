@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -408,7 +408,7 @@ wheels = [
 
 [[package]]
 name = "restic-compose-backup"
-version = "0.0.0"
+version = "1.5.4+elmotec.0"
 source = { editable = "." }
 dependencies = [
     { name = "docker" },
