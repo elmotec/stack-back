@@ -168,6 +168,16 @@ def backup(config, containers: RunningContainers):
     logger.debug(
         "Starting backup container with image %s", containers.this_container.image
     )
+    process_labels = {
+        containers.backup_process_label: "True",
+        "com.docker.compose.project": containers.project_name,
+    }
+    backup_options_label = containers.this_container.get_label(
+        enums.LABEL_RESTIC_BACKUP_OPTIONS
+    )
+    if backup_options_label and backup_options_label.strip():
+        process_labels[enums.LABEL_RESTIC_BACKUP_OPTIONS] = backup_options_label
+
     try:
         result = backup_runner.run(
             image=containers.this_container.image,
@@ -175,10 +185,7 @@ def backup(config, containers: RunningContainers):
             volumes=volumes,
             environment=containers.this_container.environment,
             source_container_id=containers.this_container.id,
-            labels={
-                containers.backup_process_label: "True",
-                "com.docker.compose.project": containers.project_name,
-            },
+            labels=process_labels,
         )
     except Exception as ex:
         logger.exception(ex)
@@ -231,21 +238,20 @@ def start_backup_process(config, containers):
         logger.error("No containers for backup found")
         exit(1)
 
+    restic_backup_options = containers.this_container.restic_backup_options
+    if restic_backup_options:
+        logger.debug("Using global restic backup options from the backup service")
+    else:
+        restic_backup_options = ["--verbose"]
+
     # stop containers labeled to stop during backup
     if len(containers.stop_during_backup_containers) > 0:
         utils.stop_containers(containers.stop_during_backup_containers)
 
-    backup_args_label = containers.this_container.get_label(
-        enums.LABEL_RESTIC_BACKUP_OPTIONS
-    )
-    restic_backup_options = (
-        backup_args_label.split() if backup_args_label else ["--verbose"]
-    )
-
     # back up volumes
     if has_volumes:
         try:
-            logger.info("Backing up volumes with arguments: %s", restic_backup_options)
+            logger.info("Backing up volumes")
             vol_result = restic.backup_files(
                 config.repository,
                 restic_backup_options=restic_backup_options,

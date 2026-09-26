@@ -63,6 +63,7 @@ services:
     image: mysql:8
     labels:
       stack-back.mysql: true
+      stack-back.restic.backup.options: --tag mysql-target
     environment:
       - MYSQL_ROOT_PASSWORD=test_root_password
       - MYSQL_DATABASE=testdb

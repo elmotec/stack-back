@@ -406,9 +406,10 @@ Restic Backup Options
 ~~~~~~~~~~~~~~~~~~~~~
 
 Additional restic options can be passed to the ``rcb backup`` sub-command
-by adding the ``stack-back.restic.backup.options``
-label to the backup service. The value of this label is appended as-is at
-the end of the underlying ``restic backup`` command.
+by adding the ``stack-back.restic.backup.options`` label to the backup
+service. The value is parsed as shell-style arguments and appended to the
+underlying ``restic backup`` command. Quoted values are preserved, but the
+arguments are not evaluated by a shell.
 
 The option defaults to ``--verbose``.
 
@@ -432,6 +433,27 @@ With the above example configuration, the backup will be executed as:
 
 
 It applies to both volume and database backups.
+
+Database services can use the same label to append options only to their own
+database snapshot. These target-specific options are appended after the
+options from the backup service. For example:
+
+.. code:: yaml
+
+    backup:
+      image: ghcr.io/lawndoc/stack-back:latest
+      labels:
+        stack-back.restic.backup.options: "--tag production"
+
+    postgres:
+      image: postgres:17
+      labels:
+        stack-back.postgres: true
+        stack-back.restic.backup.options: '--tag postgres --host "database server"'
+
+The PostgreSQL snapshot receives both sets of options, while volume and other
+database snapshots receive only ``--tag production``. Options are passed to
+restic without validation; an invalid option causes that backup to fail.
 
 mariadb
 ~~~~~~~

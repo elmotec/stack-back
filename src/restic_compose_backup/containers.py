@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import shlex
 import socket
 
 from restic_compose_backup import enums, utils
@@ -221,6 +222,12 @@ class Container:
         """Get a label by name"""
         return self._labels.get(name, None)
 
+    @property
+    def restic_backup_options(self) -> list[str]:
+        """Restic backup options configured on this container."""
+        value = self.get_label(enums.LABEL_RESTIC_BACKUP_OPTIONS)
+        return shlex.split(value) if value else []
+
     def filter_mounts(self):
         """Get all mounts for this container matching include/exclude filters"""
         filtered = []
@@ -315,7 +322,7 @@ class Container:
         """list: create a dump command restic and use to send data through stdin"""
         raise NotImplementedError("Base container class don't implement this")
 
-    def _parse_pattern(self, value: str) -> List[str]:
+    def _parse_pattern(self, value: str) -> list[str]:
         """list: Safely parse include/exclude pattern from user"""
         if not value:
             return None

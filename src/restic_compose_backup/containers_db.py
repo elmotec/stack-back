@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from restic_compose_backup.containers import Container
@@ -7,6 +8,19 @@ from restic_compose_backup import (
     restic,
 )
 from restic_compose_backup import utils
+
+logger = logging.getLogger(__name__)
+
+
+def merge_restic_backup_options(container, global_options: list[str]) -> list[str]:
+    """Combine global options with options from a database container."""
+    target_options = container.restic_backup_options
+    if target_options:
+        logger.debug(
+            "Using target-specific restic backup options for service %s",
+            container.service_name,
+        )
+    return [*global_options, *target_options]
 
 
 class MariadbContainer(Container):
@@ -59,13 +73,14 @@ class MariadbContainer(Container):
     def backup(self, restic_backup_options: list[str]) -> int:
         config = Config()
         creds = self.get_credentials()
+        options = merge_restic_backup_options(self, restic_backup_options)
 
         return restic.backup_from_stdin(
             config.repository,
             self.backup_destination_path(),
             self.id,
             self.dump_command(),
-            restic_backup_options=restic_backup_options,
+            restic_backup_options=options,
             environment={"MYSQL_PWD": creds["password"]},
         )
 
@@ -133,13 +148,14 @@ class MysqlContainer(Container):
     def backup(self, restic_backup_options: list[str]) -> int:
         config = Config()
         creds = self.get_credentials()
+        options = merge_restic_backup_options(self, restic_backup_options)
 
         return restic.backup_from_stdin(
             config.repository,
             self.backup_destination_path(),
             self.id,
             self.dump_command(),
-            restic_backup_options=restic_backup_options,
+            restic_backup_options=options,
             environment={"MYSQL_PWD": creds["password"]},
         )
 
@@ -196,14 +212,14 @@ class PostgresContainer(Container):
 
     def backup(self, restic_backup_options: list[str]) -> int:
         config = Config()
-        creds = self.get_credentials()
+        options = merge_restic_backup_options(self, restic_backup_options)
 
         return restic.backup_from_stdin(
             config.repository,
             self.backup_destination_path(),
             self.id,
             self.dump_command(),
-            restic_backup_options=restic_backup_options,
+            restic_backup_options=options,
         )
 
     def backup_destination_path(self) -> str:

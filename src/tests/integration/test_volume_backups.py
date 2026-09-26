@@ -108,6 +108,13 @@ def test_backup_bind_mount(run_rcb_command, create_test_data, backup_container):
     assert all("test-tag" in s.tags for s in snapshots), (
         f"Not all snapshots have 'test-tag':\n{output}"
     )
+    mysql_snapshots = [
+        snapshot for snapshot in snapshots if "/databases/mysql/" in snapshot.paths
+    ]
+    assert len(mysql_snapshots) == 1, f"Expected one MySQL snapshot:\n{output}"
+    assert "mysql-target" in mysql_snapshots[0].tags, (
+        f"MySQL snapshot is missing its target-specific tag:\n{output}"
+    )
 
 
 def test_restore_bind_mount(
