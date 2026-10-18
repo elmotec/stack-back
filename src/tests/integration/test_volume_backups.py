@@ -64,7 +64,7 @@ def parse_snapshots(output: str) -> list[Snapshot]:
         )
         paths_val = line[paths_pos:].strip() if paths_pos > 0 else ""
 
-        if id_val:
+        if re.fullmatch(r"[0-9a-f]{8}", id_val):
             snapshots.append(
                 Snapshot(
                     id=id_val,
