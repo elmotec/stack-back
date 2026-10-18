@@ -7,6 +7,8 @@
       ":docker",
       ":prHourlyLimitNone",
       ":timezone(America/Chicago)",
-      "helpers:pinGitHubActionDigests"
-    ]
+      "helpers:pinGitHubActionDigests",
+      ":maintainLockFilesWeekly"
+    ],
+    "forkProcessing": "enabled"
   }
